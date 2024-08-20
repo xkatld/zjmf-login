@@ -1,5 +1,6 @@
 # zjmf-login
 智简魔方,魔方财务第三方登录插件-GitHub/gitee/Google
+有需要其他可以提交Issues
 # 使用方法
 放入/public/plugins/oauth目录，设置回调的话
 github示例
