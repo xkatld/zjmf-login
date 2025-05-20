@@ -20,12 +20,12 @@ class linuxdo
             'Client ID' => [
                 'type' => 'text',
                 'name' => 'client_id',
-                'desc' => '从Linux.do管理员处获取的Client ID'
+                'desc' => '从connect.linux.do获取的Client ID'
             ],
             'Client Secret' => [
                 'type' => 'text',
                 'name' => 'client_secret',
-                'desc' => '从Linux.do管理员处获取的Client Secret'
+                'desc' => '从connect.linux.do获取的Client Secret'
             ],
         ];
     }
@@ -38,16 +38,12 @@ class linuxdo
 
         $clientId = $params['client_id'];
         $redirectUri = $params['callback'];
-        $scope = 'read';
 
-        $authBaseUrl = 'https://linux.do/oauth2/authorize';
-
-        $authUrl = $authBaseUrl . '?' . http_build_query([
-            'client_id' => $clientId,
-            'redirect_uri' => $redirectUri,
-            'response_type' => 'code',
-            'scope' => $scope,
-        ]);
+        $authUrl = 'https://connect.linux.do/oauth2/authorize?' . http_build_query([
+             'response_type' => 'code',
+             'client_id' => $clientId,
+             'redirect_uri' => $redirectUri,
+         ]);
 
         return $authUrl;
     }
@@ -60,25 +56,30 @@ class linuxdo
 
         $clientId = $params['client_id'];
         $clientSecret = $params['client_secret'];
-        $redirectUri = $params['callback'];
         $code = $params['code'];
+        $redirectUriForToken = '';
 
-        $tokenUrl = 'https://linux.do/oauth2/token';
+        $tokenUrl = 'https://connect.linux.do/oauth2/token';
 
-        $tokenParams = [
+        $key = base64_encode($clientId . ':' . $clientSecret);
+
+        $header = [
+            'Authorization: Basic ' . $key,
+            'Accept: application/json'
+        ];
+
+        $postData = http_build_query([
             'grant_type' => 'authorization_code',
             'code' => $code,
-            'client_id' => $clientId,
-            'client_secret' => $clientSecret,
-            'redirect_uri' => $redirectUri,
-        ];
+            'redirect_uri' => $redirectUriForToken,
+        ]);
 
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $tokenUrl);
         curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($tokenParams));
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Accept: application/json']);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $header);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
         $response = curl_exec($ch);
@@ -93,17 +94,23 @@ class linuxdo
         $tokenData = json_decode($response, true);
 
         if (!isset($tokenData['access_token'])) {
-             $errorMsg = $tokenData['error_description'] ?? $tokenData['error'] ?? '未知错误';
-             throw new \Exception("Linux.do 访问令牌响应中未找到令牌: " . $errorMsg);
+            $errorMsg = $tokenData['error_description'] ?? $tokenData['error'] ?? '未知错误';
+            throw new \Exception("Linux.do 访问令牌响应中未找到令牌: " . $errorMsg);
         }
 
         $accessToken = $tokenData['access_token'];
 
-        $userInfoUrl = 'https://linux.do/oauth2/user';
+        $userInfoUrl = 'https://connect.linux.do/api/user';
+
+        $header = [
+            'Authorization: Bearer ' . $accessToken,
+            'Accept: application/json'
+        ];
 
         $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $userInfoUrl . '?access_token=' . $accessToken);
+        curl_setopt($ch, CURLOPT_URL, $userInfoUrl);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $header);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
         $response = curl_exec($ch);
@@ -117,19 +124,23 @@ class linuxdo
 
         $userData = json_decode($response, true);
 
-        if (!isset($userData['user']['id'])) {
+        if (!isset($userData['id'])) {
              $errorMsg = $userData['message'] ?? '未知错误';
              throw new \Exception("Linux.do 用户信息响应中未找到用户ID: " . $errorMsg);
         }
 
-        $openid = (string) $userData['user']['id'];
+        $openid = (string) $userData['id'];
         $userInfo = [
-            'username' => $userData['user']['username'] ?? $userData['user']['name'] ?? 'Linux.do 用户',
+            'username' => $userData['username'] ?? $userData['name'] ?? 'Linux.do 用户',
             'sex'      => null,
             'province' => null,
-            'city'     => null,
-            'avatar'   => $userData['user']['avatar_template'] ? 'https://linux.do' . str_replace('{size}', '120', $userData['user']['avatar_template']) : null,
+            'city'     => $userData['location'] ?? null,
+            'avatar'   => $userData['avatar_url'] ?? null,
         ];
+
+        if (empty($userInfo['avatar']) && !empty($userData['avatar_template'])) {
+             $userInfo['avatar'] = 'https://linux.do' . str_replace('{size}', '120', $userData['avatar_template']);
+        }
 
         $callbackBind = 'all';
 
