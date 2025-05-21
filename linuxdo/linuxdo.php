@@ -10,7 +10,7 @@ class linuxdo
             'name'        => 'Linux.do登录',
             'description' => '使用Linux.do账号登录您的网站',
             'author'      => 'xkatld',
-            'logo_url'    => 'linuxdo.svg',
+            'logo_url'    => 'linuxdo.webp',
         ];
     }
 
