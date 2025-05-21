@@ -14,7 +14,7 @@ class gitlab
             'name'        => 'GitLab 登录',
             'description' => '使用 GitLab 账号登录',
             'author'      => 'xkatld',
-            'logo_url'    => 'gitlab.png',
+            'logo_url'    => 'gitlab.svg',
         ];
     }
 
